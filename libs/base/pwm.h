@@ -24,13 +24,28 @@
 
 namespace coralmicro {
 
-// The board currently has 2 pwm pins exposed:
-// PWM_A (pin 10 on the left-side header)
-// PWM_B (pin 9 on the left-side header).
-// Note: These pins output a max of 1.8V
+// PWM-capable pins on the left-side header (J9).
+//
+// Note: These pins output a max of 1.8V.
+//
+// k9 and k10 are the two pins the board documents as PWM_B and PWM_A. k7 and
+// k8 are the UART6 CTS/RTS pins, which the i.MX RT1176 can also mux to
+// FlexPWM3 submodule 0; they are usable as PWM whenever UART6 flow control is
+// not. Each pair belongs to a different FlexPWM instance, so the two pairs
+// have independent periods and must be enabled with separate PwmEnable()
+// calls.
+//
+// The only other PWM-capable header pins are J9 pin 3 (GPIO_AD_06,
+// FLEXPWM1_PWM0_X) and J9 pin 4 (GPIO_AD_07, FLEXPWM1_PWM1_X). They are not
+// listed here because the X channel cannot be driven through
+// PWM_SetupPwm(): that function only distinguishes PWM_A from "not PWM_A",
+// so an X channel is programmed into the B value registers and the B output
+// enable. Supporting them needs direct register programming.
 enum class PwmPin {
   k9,
   k10,
+  k7,
+  k8,
 };
 
 // Represents a PWM Pin's HW setting.

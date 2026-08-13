@@ -41,17 +41,43 @@ pwm_module_control_t PwmModuleToControl(pwm_submodule_t module) {
   }
 }
 
+// Picks the smallest prescale for which one period still fits in the
+// submodule's 16-bit counter.
+//
+// The fixed /4 prescale this used to hardcode silently produced the wrong
+// frequency below ~916 Hz: PWM_SetupPwm() computes the period as
+// `(uint16_t)(clock / frequency)`, so a request for 50 Hz on a 60 MHz timer
+// clock truncated 1,200,000 counts to 20,352 and ran at ~2.95 kHz instead.
+// Servo and ESC framing lives entirely in that broken range.
+pwm_clock_prescale_t ChoosePrescale(uint32_t src_clock_hz, uint32_t freq_hz) {
+  for (uint32_t shift = 0; shift < 7; ++shift) {
+    if (((src_clock_hz >> shift) / freq_hz) <= UINT16_MAX) {
+      return static_cast<pwm_clock_prescale_t>(shift);
+    }
+  }
+  return kPWM_Prescale_Divide_128;
+}
+
 }  // namespace
 
 PwmPinSetting PwmPinSettingFor(PwmPin pin) {
   PwmPinSetting setting{};
-  setting.base = PWM1;
   setting.sub_module = kPWM_Module_0;
   switch (pin) {
     case PwmPin::k10:
+      setting.base = PWM1;
       setting.pwm_channel = kPWM_PwmA;
       break;
     case PwmPin::k9:
+      setting.base = PWM1;
+      setting.pwm_channel = kPWM_PwmB;
+      break;
+    case PwmPin::k7:
+      setting.base = PWM3;
+      setting.pwm_channel = kPWM_PwmA;
+      break;
+    case PwmPin::k8:
+      setting.base = PWM3;
       setting.pwm_channel = kPWM_PwmB;
       break;
     default:
@@ -65,6 +91,8 @@ void PwmInit() {
   if (!muxed) {
     IOMUXC_SetPinMux(IOMUXC_GPIO_AD_00_FLEXPWM1_PWM0_A, 0U);
     IOMUXC_SetPinMux(IOMUXC_GPIO_AD_01_FLEXPWM1_PWM0_B, 0U);
+    IOMUXC_SetPinMux(IOMUXC_GPIO_EMC_B2_00_FLEXPWM3_PWM0_A, 0U);
+    IOMUXC_SetPinMux(IOMUXC_GPIO_EMC_B2_01_FLEXPWM3_PWM0_B, 0U);
   }
   static bool xbar_inited = false;
   if (!xbar_inited) {
@@ -73,6 +101,13 @@ void PwmInit() {
                                kXBARA1_OutputFlexpwm1Fault0);
     XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh,
                                kXBARA1_OutputFlexpwm1Fault1);
+    // Faults 2 and 3 are shared across FlexPWM1-4; faults 0 and 1 are
+    // per-instance, so FlexPWM3 needs its own pair tied high or its outputs
+    // stay in the fault state.
+    XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh,
+                               kXBARA1_OutputFlexpwm3Fault0);
+    XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh,
+                               kXBARA1_OutputFlexpwm3Fault1);
     XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh,
                                kXBARA1_OutputFlexpwm1234Fault2);
     XBARA_SetSignalsConnection(XBARA1, kXBARA1_InputLogicHigh,
@@ -96,7 +131,8 @@ void PwmEnable(const std::vector<PwmPinConfig>& pin_configs) {
   const auto& sub_module = pin_configs[0].pin_setting.sub_module;
   pwm_config_t pwm_config;
   PWM_GetDefaultConfig(&pwm_config);
-  pwm_config.prescale = kPWM_Prescale_Divide_4;
+  pwm_config.prescale = ChoosePrescale(CLOCK_GetRootClockFreq(kCLOCK_Root_Bus),
+                                       pin_configs[0].frequency);
   if (PWM_Init(base_addr, sub_module, &pwm_config) == kStatus_Fail) {
     printf("PWM_Init failed\r\n");
     return;
