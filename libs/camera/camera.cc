@@ -556,6 +556,18 @@ bool CameraTask::GetFrame(const std::vector<CameraFrameFormat>& fmts) {
   return ret;
 }
 
+void CameraTask::CsiCallback(CSI_Type* /*base*/, csi_handle_t* /*handle*/,
+                             status_t status, void* user) {
+  auto* self = static_cast<CameraTask*>(user);
+  if (status == kStatus_CSI_FrameDone && self->frame_done_cb_)
+    self->frame_done_cb_(self->frame_done_param_);
+}
+
+void CameraTask::SetFrameDoneCallback(FrameDoneCallback cb, void* param) {
+  frame_done_param_ = param;
+  frame_done_cb_ = cb;
+}
+
 bool CameraTask::Read(uint16_t reg, uint8_t* val) {
   lpi2c_master_transfer_t transfer;
   transfer.flags = kLPI2C_TransferDefaultFlag;
@@ -765,7 +777,7 @@ camera::EnableResponse CameraTask::HandleEnableRequest(const CameraMode& mode) {
   // Shifting
   Write(CameraRegisters::kVsyncHsyncPixelShiftEn, 0x0);
 
-  status = CSI_TransferCreateHandle(CSI, &csi_handle_, nullptr, 0);
+  status = CSI_TransferCreateHandle(CSI, &csi_handle_, CsiCallback, this);
 
   int framebuffer_count = kFramebufferCount;
   if (mode == CameraMode::kTrigger) {

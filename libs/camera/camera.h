@@ -310,6 +310,21 @@ class CameraTask
   // @param config `CameraMotionDetectionConfig` to apply to the camera.
   void SetMotionDetectionConfig(const CameraMotionDetectionConfig& config);
 
+  // Called from the CSI interrupt as soon as a frame's DMA completes, before
+  // any consumer sees it. Anything measuring camera latency needs this: the
+  // moment `GetFrame()` returns already includes queueing and format
+  // conversion, which are tens of milliseconds. Runs in interrupt context, so
+  // keep it to a timestamp. Pass nullptr to remove.
+  using FrameDoneCallback = void (*)(void* param);
+  void SetFrameDoneCallback(FrameDoneCallback cb, void* param);
+
+  // Raw access to the image sensor's registers, so a caller can pin
+  // auto-exposure. Integration time otherwise varies with the scene and lands
+  // inside any latency being measured. Safe to call from another task:
+  // LPI2C_RTOS_Transfer takes a mutex.
+  bool ReadSensorRegister(uint16_t reg, uint8_t* val) { return Read(reg, val); }
+  bool WriteSensorRegister(uint16_t reg, uint8_t val) { return Write(reg, val); }
+
   // Native image pixel width.
   static constexpr size_t kWidth = 324;
 
@@ -334,6 +349,8 @@ class CameraTask
   bool Write(uint16_t reg, uint8_t val);
   void SetDefaultRegisters();
   void SetMotionDetectionRegisters();
+  static void CsiCallback(CSI_Type* base, csi_handle_t* handle,
+                          status_t status, void* user);
 
   lpi2c_rtos_handle_t* i2c_handle_;
   csi_handle_t csi_handle_;
@@ -341,6 +358,8 @@ class CameraTask
   CameraMode mode_;
   CameraTestPattern test_pattern_;
   CameraMotionDetectionConfig md_config_;
+  FrameDoneCallback frame_done_cb_{nullptr};
+  void* frame_done_param_{nullptr};
   bool enabled_{false};
 };
 
