@@ -32,19 +32,26 @@ struct TaskPriorityImpl {
 template <int N>
 inline constexpr int TaskPriority = TaskPriorityImpl<N>::value;
 
+// Absolute, not relative to the ceiling. Level 4 is left empty for an
+// application task that must outrank every driver; the relative form used to
+// put the console and the USB stack there and would drag them back up with
+// any change to configMAX_PRIORITIES.
+//
+// Bands and their order are otherwise unchanged: drivers at 3, application
+// and the Edge TPU at 2.
 #if (__CORTEX_M == 7)
 enum {
-  kIpcTaskPriority = TaskPriority<configMAX_PRIORITIES - 1>,
-  kConsoleTaskPriority = TaskPriority<configMAX_PRIORITIES - 2>,
-  kAppTaskPriority = TaskPriority<configMAX_PRIORITIES - 2>,
-  kUsbDeviceTaskPriority = TaskPriority<configMAX_PRIORITIES - 1>,
-  kUsbHostTaskPriority = TaskPriority<configMAX_PRIORITIES - 1>,
-  kEdgeTpuDfuTaskPriority = TaskPriority<configMAX_PRIORITIES - 2>,
-  kEdgeTpuTaskPriority = TaskPriority<configMAX_PRIORITIES - 2>,
-  kRandomTaskPriority = TaskPriority<configMAX_PRIORITIES - 1>,
-  kPmicTaskPriority = TaskPriority<configMAX_PRIORITIES - 1>,
-  kCameraTaskPriority = TaskPriority<configMAX_PRIORITIES - 1>,
-  kAudioTaskPriority = TaskPriority<configMAX_PRIORITIES - 1>,
+  kIpcTaskPriority = TaskPriority<3>,
+  kConsoleTaskPriority = TaskPriority<2>,
+  kAppTaskPriority = TaskPriority<2>,
+  kUsbDeviceTaskPriority = TaskPriority<3>,
+  kUsbHostTaskPriority = TaskPriority<3>,
+  kEdgeTpuDfuTaskPriority = TaskPriority<2>,
+  kEdgeTpuTaskPriority = TaskPriority<2>,
+  kRandomTaskPriority = TaskPriority<3>,
+  kPmicTaskPriority = TaskPriority<3>,
+  kCameraTaskPriority = TaskPriority<3>,
+  kAudioTaskPriority = TaskPriority<3>,
 };
 #elif (__CORTEX_M == 4)
 enum {
