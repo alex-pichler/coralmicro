@@ -301,7 +301,9 @@ Some MCU allow computing and verifying the IP, UDP, TCP and ICMP checksums by ha
 
 #define TCPIP_MBOX_SIZE        32
 #define TCPIP_THREAD_STACKSIZE 1024
-#define TCPIP_THREAD_PRIO      8
+// NXP original defines 8 (of 18)
+// xTaskCreate clamps that to 4 (of 4) -> preempts app
+#define TCPIP_THREAD_PRIO      1
 
 /**
  * DEFAULT_RAW_RECVMBOX_SIZE: The mailbox size for the incoming packets on a
