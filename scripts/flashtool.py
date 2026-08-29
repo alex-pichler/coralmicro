@@ -648,7 +648,9 @@ def StateResetElfloader(serial_number=None):
 
 
 def StateProgram(blhost_path, sbfile_path):
-  subprocess.check_call(
+  # Same udev race as the two steps above: the flashloader has only just
+  # enumerated, so its node can still be root-only when blhost opens it.
+  BlhostWithRetry(
       [blhost_path, '-u', flashloader_vidpid(), 'receive-sb-file', sbfile_path])
   return StateLoadElfloader
 
