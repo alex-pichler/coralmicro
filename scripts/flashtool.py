@@ -77,6 +77,11 @@ elif system_name == 'Darwin':
 elif system_name == 'Linux':
   platform_dir = 'linux/amd64'
   toolchain_dir = 'toolchain-linux'
+  # Skip the per-packet ACK read, as Windows and macOS already do above. It
+  # serialises a second USB transaction against every write for no benefit:
+  # flow control comes from the OUT endpoint NAKing until the device re-arms
+  # its receive buffer, not from this handshake.
+  skip_hid_readback = True
 else:
   print('Unknown operating system!' + system_name)
   raise OSError
@@ -128,8 +133,12 @@ def elfloader_msg_setsize(size):
   return struct.pack('=BBl', 0, ELFLOADER_SETSIZE, size)
 
 
-# 64 bytes HID packet, adjust for header and padding
-ELFLOADER_MAX_BYTES_PER_PACKET = 64 - struct.calcsize('=BBll') + 1
+# 512 byte HID packet, adjust for header and padding. Was 64, which is the
+# floor for a full-speed interrupt endpoint but not for this one: the elfloader
+# enumerates at high speed and its endpoint descriptors have always advertised
+# wMaxPacketSize 512. Only the HID *report* descriptor said 64, so every packet
+# carried 55 payload bytes and a 12 MB image took ~225 s at ~54 KB/s.
+ELFLOADER_MAX_BYTES_PER_PACKET = 512 - struct.calcsize('=BBll') + 1
 
 
 def elfloader_msg_bytes(offset, data):
@@ -539,9 +548,35 @@ def StateCheckForSdp():
   return FlashtoolError('Unable to find device in SDP mode.')
 
 
+
+def BlhostWithRetry(argv, attempts=6, settle=0.5):
+  """Run a blhost command, retrying a device that is not answering yet.
+
+  The state machine reaches each of these steps within milliseconds of the
+  board re-enumerating into the next mode, and at that instant the device node
+  usually still carries its default root-only permissions -- udev has seen the
+  device but has not applied the rule yet. blhost fails to open it and the whole
+  run dies, which is why a hand-run blhost a second later always worked while
+  the same command from here did not. Retrying is the fix: the window is short
+  and closes on its own.
+
+  stdout/stderr stay captured so a retried failure is quiet, but the last
+  failure prints what blhost actually said instead of only a CalledProcessError.
+  """
+  for i in range(attempts):
+    result = subprocess.run(argv, capture_output=True, universal_newlines=True)
+    if result.returncode == 0:
+      return
+    if i + 1 < attempts:
+      time.sleep(settle)
+  print(result.stdout, end='')
+  print(result.stderr, end='')
+  raise subprocess.CalledProcessError(result.returncode, argv)
+
+
 def StateLoadFlashloader(blhost_path, flashloader_path):
-  subprocess.check_call([blhost_path, '-u', sdp_vidpid(), '--', 'load-image',
-                        flashloader_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+  BlhostWithRetry([blhost_path, '-u', sdp_vidpid(), '--', 'load-image',
+                   flashloader_path])
   return StateCheckForFlashloader
 
 
@@ -559,8 +594,8 @@ def StateLoadElfloader(toolchain_path, elfloader_path, elfloader_elf_path, blhos
         'Failed to find disable_usb_timeout symbol in {}'.format(elfloader_elf_path))
   start_address = hexformat.srecord.SRecord.fromsrecfile(
       elfloader_path).startaddress
-  subprocess.check_call([blhost_path, '-u', flashloader_vidpid(), 'flash-image',
-                        elfloader_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+  BlhostWithRetry([blhost_path, '-u', flashloader_vidpid(), 'flash-image',
+                   elfloader_path])
   subprocess.check_output('{} -u {} write-memory {} {{{{ffffffff}}}}'.format(
       blhost_path, flashloader_vidpid(), hex(disable_usb_timeout_address)), shell=True, universal_newlines=True)
   subprocess.call([blhost_path, '-u', flashloader_vidpid(), 'call',
@@ -1156,12 +1191,12 @@ def main():
     serial_number = args.serial
   if len(serial_list) > 1 and not serial_number:
     print('Multiple Dev Board Micros detected, please provide a serial number.')
-    return
+    sys.exit(1)
   if not serial_number and len(serial_list) == 1:
     serial_number = serial_list[0]
   if not serial_number:
     print('No Dev Board Micro devices detected!')
-    return
+    sys.exit(1)
 
   with tempfile.TemporaryDirectory() as workdir:
     sbfile_path = None

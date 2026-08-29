@@ -41,7 +41,7 @@ void elfloader_main(void *param);
 TimerHandle_t usb_timer;
 uint8_t *elfloader_recv_image = nullptr;
 char *elfloader_recv_path = nullptr;
-uint8_t elfloader_data[64];
+uint8_t elfloader_data[512];
 class_handle_t elfloader_class_handle;
 ElfloaderTarget elfloader_target = ElfloaderTarget::kRam;
 lfs_file_t file_handle;

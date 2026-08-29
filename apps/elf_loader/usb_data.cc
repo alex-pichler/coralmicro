@@ -24,14 +24,16 @@ uint8_t elfloader_hid_report[] = {
     0x15, 0x80, /* Logical Minimum (-128) */
     0x25, 0x7f, /* Logical Maximum (127) */
     0x75, 0x08, /* Report Size (8U bits) */
-    0x95, 0x40, /* Report count (64U bytes) */
+    0x96, 0x00, 0x02, /* Report Count (512U bytes) -- 2-byte item; the 1-byte
+                         form (0x95) only encodes up to 255, which is what held
+                         this at 64 and capped the transfer at 55 B/packet. */
     0x81, 0x02, /* Input(Data, Variable, Absolute) */
 
     0x09, 0x84, /* Usage (Vendor defined) */
     0x15, 0x80, /* Logical Minimum (-128) */
     0x25, 0x7f, /* Logical Maximum (127) */
     0x75, 0x08, /* Report Size (8U bits) */
-    0x95, 0x40, /* Report Count (64U) */
+    0x96, 0x00, 0x02, /* Report Count (512U bytes) */
     0x91, 0x02, /* Output (Data, Variable, Absolute) */
     0xc0        /* End collection */
 };
@@ -55,7 +57,7 @@ coralmicro::HidClassDescriptor elfloader_descriptor_data = {
         0 /* set by code */,
         0x03,
         512,
-        3,
+        1,
     },  // EndpointDescriptor
     {
         sizeof(coralmicro::EndpointDescriptor),
@@ -63,20 +65,24 @@ coralmicro::HidClassDescriptor elfloader_descriptor_data = {
         0 /* set by code */,
         0x03,
         512,
-        3,
+        1,
     },  // EndpointDescriptor
 };
 
+// 512 to agree with the endpoint descriptors above, which always advertised
+// 512 while this said 128 and the HID report said 64. The report descriptor was
+// the binding limit of the three, so the transfer ran at 55 payload bytes per
+// packet regardless of what the wire could carry.
 usb_device_endpoint_struct_t elfloader_hid_endpoints[2] = {
     {
         0,  // in
         USB_ENDPOINT_INTERRUPT,
-        128,
+        512,
     },
     {
         0,  // out
         USB_ENDPOINT_INTERRUPT,
-        128,
+        512,
     }};
 
 usb_device_interface_struct_t elfloader_hid_interface[1] = {
