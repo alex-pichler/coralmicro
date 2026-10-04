@@ -132,6 +132,32 @@ struct CdcEemClassDescriptor {
   EndpointDescriptor out_ep;
 } __attribute__((packed));
 
+struct CdcEthernetFunctionalDescriptor {
+  uint8_t function_length;
+  uint8_t descriptor_type;
+  uint8_t descriptor_subtype;
+  uint8_t mac_address;
+  uint32_t ethernet_statistics;
+  uint16_t max_segment_size;
+  uint16_t number_mc_filters;
+  uint8_t number_power_filters;
+} __attribute__((packed));
+
+struct CdcEcmClassDescriptor {
+  InterfaceAssociationDescriptor iad;
+  // Communication
+  InterfaceDescriptor comm_iface;
+  CdcHeaderFunctionalDescriptor hdr_fd;
+  CdcUnionFunctionalDescriptor union_fd;
+  CdcEthernetFunctionalDescriptor ethernet_fd;
+  EndpointDescriptor notify_ep;
+  // Data: alternate 0 has no endpoints, alternate 1 carries the traffic.
+  InterfaceDescriptor data_iface_idle;
+  InterfaceDescriptor data_iface;
+  EndpointDescriptor in_ep;
+  EndpointDescriptor out_ep;
+} __attribute__((packed));
+
 struct MscUmsClassDescriptor {
   InterfaceDescriptor iface;
   EndpointDescriptor in_ep;

@@ -56,6 +56,11 @@ class UsbDeviceTask {
   void UsbDeviceTaskFn();
 
   uint8_t next_descriptor_value() { return ++next_descriptor_value_; }
+  // Registers a string descriptor and returns its index.
+  uint8_t AddString(const std::string& s) {
+    extra_strings_.push_back(s);
+    return kFirstExtraString + extra_strings_.size() - 1;
+  }
   uint8_t next_interface_value() {
     uint8_t next_interface = next_interface_value_;
     CompositeDescriptor* p_composite_descriptor =
@@ -112,6 +117,9 @@ class UsbDeviceTask {
   std::vector<UsbSetHandleCallback> set_handle_callbacks_;
   std::vector<UsbHandleEventCallback> handle_event_callbacks_;
   std::string serial_number_;
+  // Indices 1 to 3 are manufacturer, product and serial number.
+  static constexpr uint8_t kFirstExtraString = 4;
+  std::vector<std::string> extra_strings_;
 };
 
 }  // namespace coralmicro

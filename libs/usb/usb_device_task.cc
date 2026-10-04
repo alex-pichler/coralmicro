@@ -106,10 +106,18 @@ usb_status_t UsbDeviceTask::Handler(usb_device_handle device_handle,
           ToUsbStringDescriptor(serial_number_.c_str(), string_desc);
           ret = kStatus_USB_Success;
           break;
-        default:
+        default: {
+          const size_t extra = string_desc->stringIndex - kFirstExtraString;
+          if (string_desc->stringIndex >= kFirstExtraString &&
+              extra < extra_strings_.size()) {
+            ToUsbStringDescriptor(extra_strings_[extra].c_str(), string_desc);
+            ret = kStatus_USB_Success;
+            break;
+          }
           printf("Unhandled string request: %d\r\n", string_desc->stringIndex);
           ret = kStatus_USB_InvalidRequest;
           break;
+        }
       }
       break;
     }

@@ -30,7 +30,7 @@
 #include "libs/base/tempsense.h"
 #include "libs/base/timer.h"
 #include "libs/camera/camera.h"
-#include "libs/cdc_eem/cdc_eem.h"
+#include "libs/cdc_ecm/cdc_ecm.h"
 #include "libs/nxp/rt1176-sdk/board_hardware.h"
 #include "libs/pmic/pmic.h"
 #include "libs/tpu/edgetpu_dfu_task.h"
@@ -46,19 +46,24 @@
 
 namespace {
 lpi2c_rtos_handle_t g_i2c5_handle;
-coralmicro::CdcEem g_cdc_eem;
+coralmicro::CdcEcm g_cdc_ecm;
 
-void InitializeCDCEEM() {
+void InitializeCDCECM() {
   using namespace std::placeholders;
-  g_cdc_eem.Init(
-      coralmicro::UsbDeviceTask::GetSingleton()->next_descriptor_value(),
-      coralmicro::UsbDeviceTask::GetSingleton()->next_descriptor_value(),
-      coralmicro::UsbDeviceTask::GetSingleton()->next_interface_value());
-  coralmicro::UsbDeviceTask::GetSingleton()->AddDevice(
-      g_cdc_eem.config_data(),
-      std::bind(&coralmicro::CdcEem::SetClassHandle, &g_cdc_eem, _1),
-      std::bind(&coralmicro::CdcEem::HandleEvent, &g_cdc_eem, _1, _2),
-      g_cdc_eem.descriptor_data(), g_cdc_eem.descriptor_data_size());
+  auto* usb = coralmicro::UsbDeviceTask::GetSingleton();
+  const uint8_t interrupt_in_ep = usb->next_descriptor_value();
+  const uint8_t bulk_in_ep = usb->next_descriptor_value();
+  const uint8_t bulk_out_ep = usb->next_descriptor_value();
+  const uint8_t comm_iface = usb->next_interface_value();
+  const uint8_t data_iface = usb->next_interface_value();
+  g_cdc_ecm.Init(interrupt_in_ep, bulk_in_ep, bulk_out_ep, comm_iface,
+                 data_iface,
+                 usb->AddString(coralmicro::CdcEcm::HostMacString()));
+  usb->AddDevice(
+      g_cdc_ecm.config_data(),
+      std::bind(&coralmicro::CdcEcm::SetClassHandle, &g_cdc_ecm, _1),
+      std::bind(&coralmicro::CdcEcm::HandleEvent, &g_cdc_ecm, _1, _2),
+      g_cdc_ecm.descriptor_data(), g_cdc_ecm.descriptor_data_size());
 }
 }  // namespace
 
@@ -85,7 +90,7 @@ extern "C" int real_main(int argc, char** argv, bool init_console_tx,
   // Make sure this happens before EEM or WICED are initialized.
   tcpip_init(nullptr, nullptr);
   coralmicro::DnsInit();
-  InitializeCDCEEM();
+  InitializeCDCECM();
   coralmicro::UsbDeviceTask::GetSingleton()->Init();
   coralmicro::UsbHostTask::GetSingleton()->Init();
   coralmicro::EdgeTpuDfuTask::GetSingleton()->Init();
