@@ -25,7 +25,11 @@ void* CustomOpInit(TfLiteContext* context, const char* buffer, size_t length) {
   return EdgeTpuManager::GetSingleton()->RegisterPackage(buffer, length);
 }
 
-void CustomOpFree(TfLiteContext* context, void* buffer) {}
+void CustomOpFree(TfLiteContext* context, void* buffer) {
+  if (buffer == nullptr) return;
+  EdgeTpuManager::GetSingleton()->ReleasePackage(
+      static_cast<EdgeTpuPackage*>(buffer));
+}
 
 TfLiteStatus CustomOpPrepare(TfLiteContext* context, TfLiteNode* node) {
   if (node->user_data == nullptr) return kTfLiteError;

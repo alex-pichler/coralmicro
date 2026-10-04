@@ -91,6 +91,9 @@ class EdgeTpuManager {
 
   // @cond Do not generate docs
   EdgeTpuPackage* RegisterPackage(const char* package_content, size_t length);
+  // Last release deletes it. Packages are keyed by buffer address, so one
+  // left behind is found again by the next model loaded at that address.
+  void ReleasePackage(EdgeTpuPackage* package);
   TfLiteStatus Invoke(EdgeTpuPackage* package, TfLiteContext* context,
                       TfLiteNode* node);
   // @endcond
@@ -129,7 +132,11 @@ class EdgeTpuManager {
 
  private:
   TpuDriver tpu_driver_;
-  std::map<uintptr_t, EdgeTpuPackage*> packages_;
+  struct Registered {
+    EdgeTpuPackage* package;
+    int users;
+  };
+  std::map<uintptr_t, Registered> packages_;
   std::array<EdgeTpuPackage*, 2> cached_packages_;
   uint64_t current_parameter_caching_token_ = 0;
   usb_host_edgetpu_instance_t* usb_instance_ = nullptr;

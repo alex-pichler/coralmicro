@@ -92,8 +92,9 @@ EdgeTpuPackage* EdgeTpuManager::RegisterPackage(const char* package_content,
   MutexLock lock(mutex_);
   auto package_ptr = (uintptr_t)package_content;
 
-  if (packages_.find(package_ptr) != packages_.end()) {
-    return packages_[package_ptr];
+  if (auto it = packages_.find(package_ptr); it != packages_.end()) {
+    ++it->second.users;
+    return it->second.package;
   }
 
   auto flexbuffer_map =
@@ -158,9 +159,23 @@ EdgeTpuPackage* EdgeTpuManager::RegisterPackage(const char* package_content,
 
   auto* edgetpu_package =
       new EdgeTpuPackage(inference_exe, parameter_caching_exe);
-  packages_[package_ptr] = edgetpu_package;
+  packages_[package_ptr] = {edgetpu_package, 1};
 
   return edgetpu_package;
+}
+
+void EdgeTpuManager::ReleasePackage(EdgeTpuPackage* package) {
+  MutexLock lock(mutex_);
+  for (auto it = packages_.begin(); it != packages_.end(); ++it) {
+    if (it->second.package != package) continue;
+    if (--it->second.users > 0) return;
+    packages_.erase(it);
+    for (auto& cached : cached_packages_) {
+      if (cached == package) cached = nullptr;
+    }
+    delete package;
+    return;
+  }
 }
 
 TfLiteStatus EdgeTpuManager::Invoke(EdgeTpuPackage* package,
